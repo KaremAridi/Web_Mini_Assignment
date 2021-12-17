@@ -27,10 +27,14 @@ const MONGO_CONNECTION_URL = `mongodb://localhost:27017/${DATABASE_NAME}`;
 //Task 1
 //#####
 
-
-
-
-
+mongoose
+  .connect(MONGO_CONNECTION_URL)
+  .then(() => {
+    console.log("connected to the db.");
+  })
+  .catch((err) => {
+    console.log("error in connecting. ERR: " + err);
+  });
 
 //****WRITE YOU SCHEMA BELOW of the students collection */
 /*
@@ -48,10 +52,38 @@ DB schema rules:
 //Task 2
 //#####
 
+const { Schema } = mongoose;
 
-
-
-
+//Schema of the exhibtion collection
+const StudentsSchema = new Schema({
+  firstName: {
+    type: String,
+    required: true,
+  },
+  lastName: {
+    type: String,
+    required: true,
+  },
+  exam1Grade: {
+    type: Number,
+    required: false,
+    min: 0,
+    max: 100,
+  },
+  exam2Grade: {
+    type: Number,
+    required: false,
+    min: 0,
+    max: 100,
+  },
+  exam3Grade: {
+    type: Number,
+    required: true,
+    min: 0,
+    max: 100,
+    default: 0,
+  },
+});
 
 /****WRITE YOUR CODE BELOW for creating your model that represents the collection "students" in MongoDB 
 I need the collection to be named exactly name "students" in the database itself.
@@ -60,9 +92,9 @@ I need the collection to be named exactly name "students" in the database itself
 //Task 3
 //#####
 
+const StudentModel = mongoose.model("students", StudentsSchema);
 
-
-
+module.exports = StudentModel;
 
 app.get("/", (req, res) => {
   res.redirect("/students");
@@ -79,14 +111,24 @@ app.get("/students", (req, res) => {
   //Task 4
   //#####
   
-
-
-
-
-
-
-
-
+    StudentModel.countDocuments({}, (_, count) => {
+      if (count > 0) {
+        StudentModel.find({}, (error, result) => {
+          if (error) throw error;
+          if (!result) {
+            console.log("nothing to find");
+            return;
+          }
+          res.render("index", { results: result });
+        });
+      } else {
+        res.render("index", {
+          message: "Sorry no students in the collection yet",
+          results: [],
+        });
+      }
+    });
+   
 });
 
 app.get("/insertAStudent", (req, res) => {
@@ -103,21 +145,34 @@ app.post("/insertAStudent", (req, res) => {
   //Write your CODE below the hashes
   //Task 5
   //#####
-  
 
+    //get the data from the body
+    const extractedData = req.body;
+    //fill the object with the necassary fields
+    const studentToInsert = new StudentModel({
+      firstName: extractedData.firstName,
+      lastName: extractedData.lastName,
+      exam1Grade: extractedData.exam1Grade,
+      exam2Grade: extractedData.exam2Grade,
+      exam3Grade: extractedData.exam3Grade,
+    });
 
-
-
-
-
-
-
-});
+    //add to the database
+    studentToInsert
+      .save()
+      .then(() => {
+        console.log("successful");
+        res.redirect("/students");
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  });
 
 app.delete("/deleteAStudent", (req, res) => {
   StudentModel.deleteOne({ _id: req.body.ID }, (err, result) => {
     if (err) {
-      console.log(err); 
+      console.log(err);
       return;
     }
     console.log(
@@ -149,16 +204,27 @@ app.post("/updateAStudent", (req, res) => {
   //Write your CODE below the hashes
   //Task 6
   //#####
+  const extractedData = req.body;
 
-
-
-
-
-
-
-
-
- 
+  StudentModel.findByIdAndUpdate(
+    { _id: extractedData.ID },
+    {
+      firstName: extractedData.firstName,
+      lastName: extractedData.lastName,
+      exam1Grade: extractedData.exam1Grade,
+      exam2Grade: extractedData.exam2Grade,
+      exam3Grade: extractedData.exam3Grade,
+    },
+    (err, res) => {
+      if (err) {
+        throw err;
+      } else {
+        console.log("updated");
+        console.log(res);
+      }
+    }
+  );
+  res.redirect("/students");
 });
 
 app.get("/filterExam3Grades", (req, res) => {
@@ -172,32 +238,108 @@ app.get("/filterExam3Grades", (req, res) => {
 //"Sorry no students in the collection that match your exam 3 filter" in case no results match.
 //Please see the requirements document of the mini-assignment for further details
 app.post("/filterExam3Grades", (req, res) => {
- //Write your CODE below the hashes
+  //Write your CODE below the hashes
   //Task 7
   //#####
+  const extractedData = req.body;
 
+  StudentModel.find(
+    { exam3Grade: { $gte: extractedData.exam3GradeFilter } },
+    (error, results) => {
+      if (error) throw error;
+      if (!results) {
+        console.log("Nothing to find");
+        return;
+      }
+      if (results.length == 0) {
+        res.render("index", {
+          message:
+            "Sorry no students in the collection that match your exam 3 filter",
+          results: [],
+        });
+      } else {
+        res.render("index", {results: results});
+      }
+    }
+  );
 
-
-  
 
 });
 
-
 //Task 8
-//Write you CODE below the hashes - You need to write a complete HTTP POST route that handles 
+//Write you CODE below the hashes - You need to write a complete HTTP POST route that handles
 //the task 8 requirements. Remember you need to create a new ejs file in the views folder for this task.
 //Please see the requirements document of the mini-assignment for further details
 //####
 
+app.get("/displayFilteredResultsForm2", (_, res) => {
+  res.render("displayFilteredResultsForm2");
+});
 
-
-
-
-
-
-
-
-
+app.post("/filterExam3Grades2", (req, res) => {
+  const extractedData = req.body;
+  if (extractedData.operations === ">=") {
+    StudentModel.find(
+      { exam3Grade: { $gte: extractedData.exam3GradeFilter } },
+      (error, results) => {
+        if (error) throw error;
+        if (!results) {
+          console.log("Nothing to find");
+          return;
+        }
+        if (results.length == 0) {
+          res.render("index", {
+            message:
+              "Sorry no students in the collection that match your exam 3 filter",
+            results: [],
+          });
+        } else {
+          res.render("index", { results: results });
+        }
+      }
+    );
+  } else if (extractedData.operations === "<=") {
+    StudentModel.find(
+      { exam3Grade: { $lte: extractedData.exam3GradeFilter } },
+      (error, results) => {
+        if (error) throw error;
+        if (!results) {
+          console.log("Nothing to find");
+          return;
+        }
+        if (results.length == 0) {
+          res.render("index", {
+            message:
+              "Sorry no students in the collection that match your exam 3 filter",
+            results: [],
+          });
+        } else {
+          res.render("index", { results: results });
+        }
+      }
+    );
+  } else {
+    StudentModel.find(
+      { exam3Grade: { $eq: extractedData.exam3GradeFilter } },
+      (error, results) => {
+        if (error) throw error;
+        if (!results) {
+          console.log("Nothing to find");
+          return;
+        }
+        if (results.length == 0) {
+          res.render("index", {
+            message:
+              "Sorry no students in the collection that match your exam 3 filter",
+            results: [],
+          });
+        } else {
+          res.render("index", { results: results });
+        }
+      }
+    );
+  }
+});
 
 //Launching the server and listening on port 8081
 const server = app.listen(8081, function () {
